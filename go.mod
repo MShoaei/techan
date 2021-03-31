@@ -1,6 +1,6 @@
-module github.com/sdcoffey/techan
+module github.com/MShoaei/techan
 
-go 1.12
+go 1.16
 
 require (
 	github.com/sdcoffey/big v0.7.0
