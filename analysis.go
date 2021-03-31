@@ -53,7 +53,7 @@ func (pga PercentGainAnalysis) Analyze(record *TradingRecord) float64 {
 }
 
 // NumTradesAnalysis analyzes the trading record for the number of trades executed
-type NumTradesAnalysis string
+type NumTradesAnalysis struct{}
 
 // Analyze analyzes the trading record for the number of trades executed
 func (nta NumTradesAnalysis) Analyze(record *TradingRecord) float64 {
