@@ -17,6 +17,10 @@ func Or(r1, r2 Rule) Rule {
 	return orRule{r1, r2}
 }
 
+func Not(r1 Rule) Rule {
+	return notRule{r1}
+}
+
 type andRule struct {
 	r1 Rule
 	r2 Rule
@@ -33,6 +37,14 @@ type orRule struct {
 
 func (or orRule) IsSatisfied(index int, record *TradingRecord) bool {
 	return or.r1.IsSatisfied(index, record) || or.r2.IsSatisfied(index, record)
+}
+
+type notRule struct {
+	r1 Rule
+}
+
+func (not notRule) IsSatisfied(index int, record *TradingRecord) bool {
+	return !not.r1.IsSatisfied(index, record)
 }
 
 // OverIndicatorRule is a rule where the First Indicator must be greater than the Second Indicator to be Satisfied
