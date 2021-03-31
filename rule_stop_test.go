@@ -23,12 +23,25 @@ func TestStopLossRule(t *testing.T) {
 		record.Operate(Order{
 			Side:   BUY,
 			Amount: big.NewFromString("10"),
-			Price:  big.ONE,
+			Price:  big.NewDecimal(10),
 		})
 
 		series := mockTimeSeriesFl(10, 9) // Lose 10%
 
-		slr := NewStopLossRule(series, -0.05)
+		slr := NewStopLossRule(series, -0.1)
+
+		assert.True(t, slr.IsSatisfied(1, record))
+
+		record = NewTradingRecord()
+		record.Operate(Order{
+			Side:   BUY,
+			Amount: big.NewFromString("10"),
+			Price:  big.NewDecimal(10),
+		})
+
+		series = mockTimeSeriesFl(10, 8) // Lose 20%
+
+		slr = NewStopLossRule(series, -0.2)
 
 		assert.True(t, slr.IsSatisfied(1, record))
 	})
@@ -39,7 +52,7 @@ func TestStopLossRule(t *testing.T) {
 		record.Operate(Order{
 			Side:   BUY,
 			Amount: big.NewFromString("10"),
-			Price:  big.ONE,
+			Price:  big.NewDecimal(10),
 		})
 
 		series := mockTimeSeriesFl(10, 10.1) // Gain 1%
