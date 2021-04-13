@@ -27,3 +27,27 @@ func (slr stopLossRule) IsSatisfied(index int, record *TradingRecord) bool {
 	loss := slr.Indicator.Calculate(index).Mul(amount).Div(openPrice).Sub(big.ONE)
 	return loss.LTE(slr.tolerance)
 }
+
+type takeProfitRule struct {
+	Indicator
+	tolerance big.Decimal
+}
+
+func NewTakeProfitRule(series *TimeSeries, lossTolerance float64) Rule {
+	return takeProfitRule{
+		Indicator: NewClosePriceIndicator(series),
+		tolerance: big.NewDecimal(lossTolerance),
+	}
+}
+
+func (tpr takeProfitRule) IsSatisfied(index int, record *TradingRecord) bool {
+	if !record.CurrentPosition().IsOpen() {
+		return false
+	}
+
+	amount := record.CurrentPosition().EntranceOrder().Amount
+
+	openPrice := record.CurrentPosition().CostBasis()
+	win := tpr.Indicator.Calculate(index).Mul(amount).Div(openPrice).Sub(big.ONE)
+	return win.GTE(tpr.tolerance)
+}
