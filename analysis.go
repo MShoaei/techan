@@ -5,6 +5,7 @@ package techan
 import (
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/sdcoffey/big"
@@ -67,11 +68,17 @@ type LogTradesAnalysis struct {
 
 // Analyze logs trades to provided io.Writer
 func (lta LogTradesAnalysis) Analyze(record *TradingRecord) float64 {
+	var profit big.Decimal
 	logOrder := func(trade *Position) {
-		fmt.Fprintln(lta.Writer, fmt.Sprintf("%s - enter with buy %s (%s @ $%s)", trade.EntranceOrder().ExecutionTime.UTC().Format(time.RFC822), trade.EntranceOrder().Security, trade.EntranceOrder().Amount, trade.EntranceOrder().Price))
-		fmt.Fprintln(lta.Writer, fmt.Sprintf("%s - exit with sell %s (%s @ $%s)", trade.ExitOrder().ExecutionTime.UTC().Format(time.RFC822), trade.ExitOrder().Security, trade.ExitOrder().Amount, trade.ExitOrder().Price))
-
-		profit := trade.ExitValue().Sub(trade.CostBasis())
+		if trade.IsShort() {
+			fmt.Fprintln(lta.Writer, fmt.Sprintf("%s - enter with sell %s (%s @ $%s)", trade.EntranceOrder().ExecutionTime.UTC().Format(time.RFC822), trade.EntranceOrder().Security, trade.EntranceOrder().Amount, trade.EntranceOrder().Price))
+			fmt.Fprintln(lta.Writer, fmt.Sprintf("%s - exit with buy %s (%s @ $%s)", trade.ExitOrder().ExecutionTime.UTC().Format(time.RFC822), trade.ExitOrder().Security, trade.ExitOrder().Amount, trade.ExitOrder().Price))
+			profit = trade.ExitValue().Sub(trade.CostBasis()).Neg()
+		} else {
+			fmt.Fprintln(lta.Writer, fmt.Sprintf("%s - enter with buy %s (%s @ $%s)", trade.EntranceOrder().ExecutionTime.UTC().Format(time.RFC822), trade.EntranceOrder().Security, trade.EntranceOrder().Amount, trade.EntranceOrder().Price))
+			fmt.Fprintln(lta.Writer, fmt.Sprintf("%s - exit with sell %s (%s @ $%s)", trade.ExitOrder().ExecutionTime.UTC().Format(time.RFC822), trade.ExitOrder().Security, trade.ExitOrder().Amount, trade.ExitOrder().Price))
+			profit = trade.ExitValue().Sub(trade.CostBasis())
+		}
 		fmt.Fprintln(lta.Writer, fmt.Sprintf("Profit: $%s", profit))
 	}
 
@@ -109,7 +116,7 @@ func (pta ProfitableTradesAnalysis) Analyze(record *TradingRecord) float64 {
 		costBasis := trade.EntranceOrder().Amount.Mul(trade.EntranceOrder().Price)
 		sellPrice := trade.ExitOrder().Amount.Mul(trade.ExitOrder().Price)
 
-		if sellPrice.GT(costBasis) {
+		if (trade.IsLong() && sellPrice.GT(costBasis)) || (trade.IsShort() && sellPrice.LT(costBasis)) {
 			profitableTrades++
 		}
 	}
@@ -159,4 +166,147 @@ func (baha BuyAndHoldAnalysis) Analyze(record *TradingRecord) float64 {
 	pos.Exit(closeOrder)
 
 	return pos.ExitValue().Sub(pos.CostBasis()).Float()
+}
+
+// CommissionAnalysis calculates the total commission paid.
+// Commission is the commission value in percent.
+type CommissionAnalysis struct {
+	Commission float64
+}
+
+// Analyze analyzes the trading record for the total commission cost.
+func (ca CommissionAnalysis) Analyze(record *TradingRecord) float64 {
+	total := big.ZERO
+	for _, trade := range record.Trades {
+		total = total.Add(trade.CostBasis().Mul(big.NewDecimal(ca.Commission * 0.01)))
+		total = total.Add(trade.ExitValue().Mul(big.NewDecimal(ca.Commission * 0.01)))
+	}
+	return total.Float()
+}
+
+type OpenPLAnalysis struct {
+	LastCandle *Candle
+}
+
+// Analyze calculates the profit if the current open position would be closed at current price.
+func (o OpenPLAnalysis) Analyze(record *TradingRecord) float64 {
+	if record.CurrentPosition().IsNew() {
+		return 0
+	}
+	var profit big.Decimal
+	trade := record.CurrentPosition()
+	amount := trade.EntranceOrder().Amount
+	if trade.IsShort() {
+		profit = o.LastCandle.ClosePrice.Mul(amount).Sub(trade.CostBasis()).Neg()
+	} else if trade.IsLong() {
+		profit = o.LastCandle.ClosePrice.Mul(amount).Sub(trade.CostBasis())
+	}
+	return profit.Float()
+}
+
+func isProfitable(trade *Position) bool {
+	return (trade.IsLong() && trade.ExitOrder().Price.GT(trade.EntranceOrder().Price)) || (trade.IsShort() && trade.ExitOrder().Price.LT(trade.EntranceOrder().Price))
+}
+
+type WinStreakAnalysis struct{}
+
+func (w WinStreakAnalysis) Analyze(record *TradingRecord) float64 {
+	max := 0
+	currentStreak := 0
+	for _, trade := range record.Trades {
+		if !isProfitable(trade) {
+			max = Max(max, currentStreak)
+			currentStreak = 0
+			continue
+		}
+		currentStreak++
+	}
+	return math.Max(float64(max), float64(currentStreak))
+}
+
+type LoseStreakAnalysis struct{}
+
+func (l LoseStreakAnalysis) Analyze(record *TradingRecord) float64 {
+	max := 0
+	currentStreak := 0
+	for _, trade := range record.Trades {
+		if isProfitable(trade) {
+			max = Max(max, currentStreak)
+			currentStreak = 0
+			continue
+		}
+		currentStreak++
+	}
+	return math.Max(float64(max), float64(currentStreak))
+}
+
+type MaxWinAnalysis struct{}
+
+func (m MaxWinAnalysis) Analyze(record *TradingRecord) float64 {
+	maxProfit := big.ZERO
+	for _, trade := range record.Trades {
+		if !isProfitable(trade) {
+			continue
+		}
+		if trade.IsShort() {
+			maxProfit = big.MaxSlice(maxProfit, trade.ExitValue().Sub(trade.CostBasis()).Neg())
+		} else {
+			maxProfit = big.MaxSlice(maxProfit, trade.ExitValue().Sub(trade.CostBasis()))
+		}
+	}
+	return maxProfit.Float()
+}
+
+type MaxLossAnalysis struct{}
+
+func (m MaxLossAnalysis) Analyze(record *TradingRecord) float64 {
+	minProfit := big.ZERO
+	for _, trade := range record.Trades {
+		if isProfitable(trade) {
+			continue
+		}
+		if trade.IsShort() {
+			minProfit = big.MinSlice(minProfit, trade.ExitValue().Sub(trade.CostBasis()).Neg())
+		} else {
+			minProfit = big.MinSlice(minProfit, trade.ExitValue().Sub(trade.CostBasis()))
+		}
+	}
+	return minProfit.Float()
+}
+
+type AverageWinAnalysis struct{}
+
+func (a AverageWinAnalysis) Analyze(record *TradingRecord) float64 {
+	win := big.ZERO
+	count := len(record.Trades)
+	for _, trade := range record.Trades {
+		if !isProfitable(trade) {
+			continue
+		}
+		count++
+		if trade.IsShort() {
+			win = win.Add(trade.ExitValue().Sub(trade.CostBasis()).Neg())
+		} else {
+			win = win.Add(trade.ExitValue().Sub(trade.CostBasis()))
+		}
+	}
+	return win.Div(big.NewFromInt(count)).Float()
+}
+
+type AverageLossAnalysis struct{}
+
+func (a AverageLossAnalysis) Analyze(record *TradingRecord) float64 {
+	loss := big.ZERO
+	count := len(record.Trades)
+	for _, trade := range record.Trades {
+		if isProfitable(trade) {
+			continue
+		}
+		if trade.IsShort() {
+			loss = loss.Add(trade.ExitValue().Sub(trade.CostBasis()).Neg())
+		} else {
+			loss = loss.Add(trade.ExitValue().Sub(trade.CostBasis()))
+		}
+	}
+	return loss.Div(big.NewFromInt(count)).Float()
 }
