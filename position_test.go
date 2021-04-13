@@ -21,7 +21,7 @@ func TestPosition_NewPosition_IsOpen(t *testing.T) {
 		Price:  big.NewFromString("2"),
 	}
 
-	position := NewPosition(order)
+	position := NewPosition(order, big.NaN, big.NaN)
 	assert.True(t, position.IsOpen())
 	assert.False(t, position.IsNew())
 	assert.False(t, position.IsClosed())
@@ -34,7 +34,7 @@ func TestNewPosition_WithBuy_IsLong(t *testing.T) {
 		Price:  big.NewFromString("2"),
 	}
 
-	position := NewPosition(order)
+	position := NewPosition(order, big.NaN, big.NaN)
 	assert.True(t, position.IsLong())
 }
 
@@ -45,7 +45,7 @@ func TestNewPosition_WithSell_IsShort(t *testing.T) {
 		Price:  big.NewFromString("2"),
 	}
 
-	position := NewPosition(order)
+	position := NewPosition(order, big.NaN, big.NaN)
 	assert.True(t, position.IsShort())
 }
 

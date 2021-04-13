@@ -162,7 +162,7 @@ func (baha BuyAndHoldAnalysis) Analyze(record *TradingRecord) float64 {
 		Price:  baha.TimeSeries.Candles[len(baha.TimeSeries.Candles)-1].ClosePrice,
 	}
 
-	pos := NewPosition(openOrder)
+	pos := NewPosition(openOrder, big.NaN, big.NaN)
 	pos.Exit(closeOrder)
 
 	return pos.ExitValue().Sub(pos.CostBasis()).Float()

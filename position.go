@@ -4,13 +4,17 @@ import "github.com/sdcoffey/big"
 
 // Position is a pair of two Order objects
 type Position struct {
-	orders [2]*Order
+	orders          [2]*Order
+	stopLossPrice   big.Decimal
+	takeProfitPrice big.Decimal
 }
 
 // NewPosition returns a new Position with the passed-in order as the open order
-func NewPosition(openOrder Order) (t *Position) {
+func NewPosition(openOrder Order, slPrice, tpPrice big.Decimal) (t *Position) {
 	t = new(Position)
 	t.orders[0] = &openOrder
+	t.stopLossPrice = slPrice
+	t.takeProfitPrice = tpPrice
 
 	return t
 }
@@ -75,4 +79,31 @@ func (p *Position) ExitValue() big.Decimal {
 	}
 
 	return big.ZERO
+}
+
+func (p *Position) ChangeStopLoss(newSLPrice big.Decimal) bool {
+	if p.IsClosed() {
+		return false
+	}
+	p.stopLossPrice = newSLPrice
+	return true
+}
+
+func (p *Position) ChangeTakeProfit(newTPPrice big.Decimal) bool {
+	if p.IsClosed() {
+		return false
+	}
+	p.takeProfitPrice = newTPPrice
+	return true
+}
+
+func (p *Position) ShouldClose(currentPrice big.Decimal) bool {
+	if !p.IsOpen() {
+		return true
+	}
+	if p.IsShort() {
+		return currentPrice.LTE(p.takeProfitPrice) || currentPrice.GTE(p.stopLossPrice)
+	} else {
+		return currentPrice.GTE(p.takeProfitPrice) || currentPrice.LTE(p.stopLossPrice)
+	}
 }
