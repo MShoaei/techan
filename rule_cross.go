@@ -26,16 +26,20 @@ type crossRule struct {
 	cmp   int
 }
 
-func (cr crossRule) IsSatisfied(index int, record *TradingRecord) bool {
-	i := index
-
-	if i == 0 {
+func (cr crossRule) IsSatisfied(index int, _ *TradingRecord) bool {
+	if index == 0 {
 		return false
 	}
 
-	if cmp := cr.lower.Calculate(i).Cmp(cr.upper.Calculate(i)); cmp == 0 || cmp == cr.cmp {
-		for ; i >= 0; i-- {
-			if cmp = cr.lower.Calculate(i).Cmp(cr.upper.Calculate(i)); cmp == 0 || cmp == -cr.cmp {
+	if cmp := cr.lower.Calculate(index).Cmp(cr.upper.Calculate(index)); cmp == cr.cmp {
+		for i := index - 1; i >= 0; i-- {
+			if cmp = cr.lower.Calculate(i).Cmp(cr.upper.Calculate(i)); cmp == cr.cmp {
+				return false
+			}
+			if cmp = cr.lower.Calculate(i).Cmp(cr.upper.Calculate(i)); cmp == 0 {
+				continue
+			}
+			if cmp = cr.lower.Calculate(i).Cmp(cr.upper.Calculate(i)); cmp == -cr.cmp {
 				return true
 			}
 		}
