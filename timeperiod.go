@@ -23,7 +23,7 @@ const (
 
 // Constants representing regexes for parsing datetimes
 var (
-	SimpleTimeFomatRegex    = regexp.MustCompile(`T\d{2}:\d{2}:\d{2}`)
+	SimpleTimeFormatRegex   = regexp.MustCompile(`T\d{2}:\d{2}:\d{2}`)
 	SimpleDateFormatV2Regex = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 )
 
@@ -34,7 +34,7 @@ var (
 // period ending in time.Now()
 func ParseTimePeriod(period string) (TimePeriod, error) {
 	dateMatches := SimpleDateFormatV2Regex.FindAllStringIndex(period, -1)
-	timeMatches := SimpleTimeFomatRegex.FindAllStringIndex(period, -1)
+	timeMatches := SimpleTimeFormatRegex.FindAllStringIndex(period, -1)
 
 	formats := make([]string, len(dateMatches))
 	timeStrings := make([]string, len(dateMatches))
